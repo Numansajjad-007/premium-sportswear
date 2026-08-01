@@ -1,0 +1,194 @@
+// Premium Sports Wear — Database Schema
+// Run `npx prisma migrate dev` after setting DATABASE_URL in .env
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  CUSTOMER
+  DEALER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  IN_PRODUCTION
+  QUALITY_CHECK
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum QuoteStatus {
+  NEW
+  REVIEWED
+  QUOTED
+  ACCEPTED
+  DECLINED
+}
+
+enum DealerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  passwordHash  String
+  role          Role      @default(CUSTOMER)
+  createdAt     DateTime  @default(now())
+
+  addresses     Address[]
+  orders        Order[]
+  designs       Design[]
+  quoteRequests QuoteRequest[]
+  dealerProfile DealerApplication?
+  messages      Message[]
+}
+
+model Address {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  line1    String
+  line2    String?
+  city     String
+  region   String?
+  postal   String
+  country  String
+  isDefault Boolean @default(false)
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String    // e.g. "Motorcycle Racing" (parent) or "Leather Suits" (child)
+  slug     String    @unique
+  imageUrl String?
+  products Product[]
+
+  parentId String?
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  description   String
+  basePrice     Decimal  @db.Decimal(10, 2)
+  categoryId    String
+  category      Category @relation(fields: [categoryId], references: [id])
+  customizable  Boolean  @default(true)
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+
+  orderItems    OrderItem[]
+  designs       Design[]
+}
+
+// A saved configuration from the Design Studio
+model Design {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  name          String   @default("Untitled Design")
+  panelColors   Json     // { panelBase: "#1c1c1f", panelChest: "#141416", ... }
+  logoUrl       String?
+  logoTransform Json?    // { x, y, scale, rotate }
+  driverName    String?
+  raceNumber    String?
+  flagColor     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  quoteRequests QuoteRequest[]
+  orderItems    OrderItem[]
+}
+
+model Order {
+  id         String      @id @default(cuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  status     OrderStatus @default(PENDING)
+  total      Decimal     @db.Decimal(10, 2)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  items          OrderItem[]
+  trackingNumber String?
+  shippingCarrier String?
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  designId  String?
+  design    Design?  @relation(fields: [designId], references: [id])
+  quantity  Int      @default(1)
+  unitPrice Decimal  @db.Decimal(10, 2)
+  size      String?
+}
+
+model QuoteRequest {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  designId    String?
+  design      Design?     @relation(fields: [designId], references: [id])
+  status      QuoteStatus @default(NEW)
+  quantity    Int         @default(1)
+  notes       String?
+  quotedPrice Decimal?    @db.Decimal(10, 2)
+  createdAt   DateTime    @default(now())
+}
+
+model DealerApplication {
+  id          String       @id @default(cuid())
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id])
+  companyName String
+  country     String
+  website     String?
+  status      DealerStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  subject   String
+  body      String
+  fromAdmin Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model ShippingSettings {
+  id        String   @id @default(cuid())
+  flatFee   Decimal  @db.Decimal(10, 2) @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model GalleryImage {
+  id        String   @id @default(cuid())
+  imageUrl  String
+  caption   String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
